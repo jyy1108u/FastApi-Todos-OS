@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .filters { display:flex; gap:8px; margin:12px 0; }
+        .filters button[aria-pressed="true"] { font-weight:bold; text-decoration:underline; }
+    </style>
+    <title>To-Do List</title>
+</head>
+<body>
+    <h1>To-Do List</h1>
+    <div class="filters">
+        <button id="filter-all" aria-pressed="true">All</button>
+        <button id="filter-active" aria-pressed="false">Active</button>
+        <button id="filter-completed" aria-pressed="false">Completed</button>
+    </div>
+    <ul id="todo-list"></ul>
+    <form id="todo-form">
+        <input type="text" id="title" placeholder="Title" required>
+        <input type="text" id="description" placeholder="Description" required>
+        <button type="submit">Add To-Do</button>
+    </form>
+    
+    <script>
+        let currentFilter = 'all';
+
+        function setFilterButtons(activeId) {
+            ['filter-all', 'filter-active', 'filter-completed'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.setAttribute('aria-pressed', id === activeId ? 'true' : 'false');
+            });
+        }
+
+        document.getElementById('filter-all').addEventListener('click', () => {
+            currentFilter = 'all';
+            setFilterButtons('filter-all');
+            fetchTodos();
+        });
+        document.getElementById('filter-active').addEventListener('click', () => {
+            currentFilter = 'active';
+            setFilterButtons('filter-active');
+            fetchTodos();
+        });
+        document.getElementById('filter-completed').addEventListener('click', () => {
+            currentFilter = 'completed';
+            setFilterButtons('filter-completed');
+            fetchTodos();
+        });
+
+        async function fetchTodos() {
+            const query =
+                currentFilter === 'completed' ? '?completed=true' :
+                currentFilter === 'active' ? '?completed=false' : '';
+
+            const response = await fetch('/todos' + query);
+            if (!response.ok) {
+                console.error('Failed to fetch todos');
+                return;
+            }
+            const todos = await response.json();
+
+            const todoList = document.getElementById('todo-list');
+            todoList.innerHTML = '';
+
+            todos.forEach(todo => {
+                const li = document.createElement('li');
+
+                // 체크박스: 완료 토글
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = !!todo.completed;
+                cb.title = 'Toggle complete';
+                cb.addEventListener('change', async () => {
+                    const res = await fetch(`/todos/${todo.id}/toggle`, { method: 'PATCH' });
+                    if (res.ok) {
+                        fetchTodos(); 
+                    } else {
+                        cb.checked = !cb.checked; 
+                        alert('Toggle failed');
+                    }
+                });
+
+                // 텍스트
+                const span = document.createElement('span');
+                span.textContent = ` ${todo.title}: ${todo.description}`;
+                if (todo.completed) {
+                    span.style.textDecoration = 'line-through';
+                    span.style.opacity = '0.7';
+                }
+
+                li.appendChild(cb);
+                li.appendChild(span);
+                todoList.appendChild(li);
+            });
+        }
+
+
+        document.getElementById('todo-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const response = await fetch('/todos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: Date.now(), title, description, completed: false })
+            });
+            if (response.ok) {
+                fetchTodos();
+            }
+        });
+
+        fetchTodos();
+    </script>
+</body>
+</html>

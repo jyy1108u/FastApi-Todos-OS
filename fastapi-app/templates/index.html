@@ -49,71 +49,124 @@
             fetchTodos();
         });
 
-        async function fetchTodos() {
-            const query =
-                currentFilter === 'completed' ? '?completed=true' :
-                currentFilter === 'active' ? '?completed=false' : '';
-
-            const response = await fetch('/todos' + query);
-            if (!response.ok) {
-                console.error('Failed to fetch todos');
-                return;
-            }
-            const todos = await response.json();
-
-            const todoList = document.getElementById('todo-list');
-            todoList.innerHTML = '';
-
-            todos.forEach(todo => {
-                const li = document.createElement('li');
-
-                // 체크박스: 완료 토글
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.checked = !!todo.completed;
-                cb.title = 'Toggle complete';
-                cb.addEventListener('change', async () => {
-                    const res = await fetch(`/todos/${todo.id}/toggle`, { method: 'PATCH' });
-                    if (res.ok) {
-                        fetchTodos(); 
-                    } else {
-                        cb.checked = !cb.checked; 
-                        alert('Toggle failed');
-                    }
-                });
-
-                // 텍스트
-                const span = document.createElement('span');
-                span.textContent = ` ${todo.title}: ${todo.description}`;
-                if (todo.completed) {
-                    span.style.textDecoration = 'line-through';
-                    span.style.opacity = '0.7';
-                }
-
-                li.appendChild(cb);
-                li.appendChild(span);
-                todoList.appendChild(li);
-            });
+        // 문자열 "true"/"false", 숫자 1/0, 불리언 true/false를 모두 진짜 불리언으로 통일
+        function normalizeCompleted(val) {
+            if (typeof val === 'boolean') return val;
+            if (typeof val === 'number') return val !== 0;
+            if (typeof val === 'string') return val.toLowerCase() === 'true' || val === '1';
+            return false;
         }
 
+        async function fetchTodos() {
+            try {
+                const query =
+                    currentFilter === 'completed' ? '?completed=true' :
+                    currentFilter === 'active'    ? '?completed=false' : '';
+
+                const response = await fetch('/todos' + query, { headers: { 'Accept': 'application/json' }});
+                if (!response.ok) throw new Error('Failed to fetch todos');
+
+                const raw = await response.json();
+                // completed 필드를 정규화
+                const todos = (Array.isArray(raw) ? raw : []).map(t => ({
+                    ...t,
+                    completed: normalizeCompleted(t.completed)
+                }));
+
+                const todoList = document.getElementById('todo-list');
+                todoList.innerHTML = '';
+
+                todos.forEach(todo => {
+                    const li = document.createElement('li');
+
+                    // 체크박스: 완료 토글
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = todo.completed === true;
+                    cb.title = 'Toggle complete';
+
+                    cb.addEventListener('change', async () => {
+                        const prev = cb.checked;
+                        try {
+                            // 서버가 /toggle PATCH 를 받는 경우
+                            const res = await fetch(`/todos/${encodeURIComponent(todo.id)}/toggle`, {
+                                method: 'PATCH',
+                                headers: { 'Accept': 'application/json' }
+                            });
+
+                            // 만약 서버가 toggle 엔드포인트 없고 본문 기대한다면 위 fetch를 아래로 바꿔 쓰면 됨:
+                            // const res = await fetch(`/todos/${encodeURIComponent(todo.id)}`, {
+                            //     method: 'PATCH',
+                            //     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            //     body: JSON.stringify({ completed: !todo.completed })
+                            // });
+
+                            if (!res.ok) throw new Error('Toggle failed');
+                            await fetchTodos();
+                        } catch (e) {
+                            // 실패 시 UI 롤백
+                            cb.checked = !prev;
+                            alert('토글 실패: ' + (e?.message || 'unknown'));
+                        }
+                    });
+
+                    // 텍스트
+                    const span = document.createElement('span');
+                    span.textContent = ` ${todo.title}: ${todo.description}`;
+                    if (todo.completed) {
+                        span.style.textDecoration = 'line-through';
+                        span.style.opacity = '0.7';
+                    }
+
+                    li.appendChild(cb);
+                    li.appendChild(span);
+                    todoList.appendChild(li);
+                });
+            } catch (e) {
+                console.error(e);
+                alert('할 일 목록을 불러오지 못했어요.');
+            }
+        }
 
         document.getElementById('todo-form').addEventListener('submit', async (event) => {
             event.preventDefault();
-            const title = document.getElementById('title').value;
-            const description = document.getElementById('description').value;
-            const response = await fetch('/todos', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ id: Date.now(), title, description, completed: false })
-            });
-            if (response.ok) {
-                fetchTodos();
+            const form = event.currentTarget;
+            const titleEl = document.getElementById('title');
+            const descEl  = document.getElementById('description');
+
+            const title = titleEl.value.trim();
+            const description = descEl.value.trim();
+            if (!title || !description) return;
+
+            // 중복 제출 방지
+            const submitBtn = form.querySelector('[type="submit"]');
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/todos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    // id는 서버가 생성하도록 맡김
+                    body: JSON.stringify({ title, description, completed: false })
+                });
+                if (!response.ok) throw new Error('Create failed');
+
+                // 입력값 초기화
+                titleEl.value = '';
+                descEl.value = '';
+                await fetchTodos();
+            } catch (e) {
+                alert('추가 실패: ' + (e?.message || 'unknown'));
+            } finally {
+                submitBtn.disabled = false;
             }
         });
 
         fetchTodos();
     </script>
+
 </body>
 </html>

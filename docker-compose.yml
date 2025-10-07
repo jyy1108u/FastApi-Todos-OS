@@ -3,8 +3,9 @@ version: "3.7"
 services:
   fastapi-app:
     build:
-      context: ./fastapi-app      # Dockerfile이 위치한 디렉토리 경로
-      dockerfile: Dockerfile      # Dockerfile 이름 (생략 가능, 기본값은 'Dockerfile')
+      context: ./fastapi-app
+      dockerfile: Dockerfile
     container_name: FastApi-app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 5001
     ports:
       - "5001:5001"

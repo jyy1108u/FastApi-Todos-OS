@@ -1,48 +1,189 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-Do List</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>To-Do List</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; }
+    form, .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    ul { list-style: none; padding: 0; }
+    li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .title { font-weight: 600; }
+    .desc { color: #666; }
+    .spacer { flex: 1 }
+    .pill { font-size: 12px; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; }
+    button.danger { border: 0; background:#f44336; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer;}
+    button.danger:hover { opacity:.9 }
+    .muted { color:#999 }
+  </style>
 </head>
 <body>
-    <h1>To-Do List</h1>
-    <ul id="todo-list"></ul>
-    <form id="todo-form">
-        <input type="text" id="title" placeholder="Title" required>
-        <input type="text" id="description" placeholder="Description" required>
-        <button type="submit">Add To-Do</button>
-    </form>
-    <script>
-        async function fetchTodos() {
-            const response = await fetch('/todos');
-            const todos = await response.json();
-            const todoList = document.getElementById('todo-list');
-            todoList.innerHTML = '';
-            todos.forEach(todo => {
-                const li = document.createElement('li');
-                li.textContent = `${todo.title}: ${todo.description}`;
-                todoList.appendChild(li);
-            });
+  <h1>To-Do List <span id="stats" class="pill muted">-</span></h1>
+
+  <!-- 툴바: 검색 + 완료여부 필터 -->
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="검색(제목/설명)" />
+    <select id="filter">
+      <option value="">전체</option>
+      <option value="false">미완료</option>
+      <option value="true">완료</option>
+    </select>
+    <button id="refresh" type="button">새로고침</button>
+    <span class="spacer"></span>
+  </div>
+
+  <ul id="todo-list"></ul>
+
+  <!-- 추가 폼 -->
+  <form id="todo-form">
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="description" placeholder="Description" required />
+    <button type="submit">Add To-Do</button>
+  </form>
+
+  <script>
+    // --- 작은 유틸 ---
+    const $ = (sel) => document.querySelector(sel);
+    const qs = () => {
+      const q = $('#search').value.trim();
+      const completed = $('#filter').value;
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      if (completed !== '') p.set('completed', completed);
+      // 기본 limit/offset 그대로 (원하면 limit, offset도 추가 가능)
+      return p.toString() ? `?${p.toString()}` : '';
+    };
+
+    // --- 통계 불러오기 ---
+    async function fetchStats() {
+      try {
+        const res = await fetch('/todos/_stats');
+        if (!res.ok) throw new Error();
+        const s = await res.json();
+        $('#stats').textContent = `총 ${s.total} · 완료 ${s.completed} · 대기 ${s.pending}`;
+      } catch {
+        $('#stats').textContent = '-';
+      }
+    }
+
+    // --- 목록 불러오기 (검색/필터 반영) ---
+    async function fetchTodos() {
+      const todoList = $('#todo-list');
+      todoList.innerHTML = '<li class="muted">불러오는 중...</li>';
+      try {
+        const res = await fetch(`/todos${qs()}`);
+        if (!res.ok) throw new Error();
+        const todos = await res.json();
+        todoList.innerHTML = '';
+        if (!todos.length) {
+          todoList.innerHTML = '<li class="muted">항목 없음</li>';
+          return;
         }
+        for (const todo of todos) {
+          const li = document.createElement('li');
 
-        document.getElementById('todo-form').addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const title = document.getElementById('title').value;
-            const description = document.getElementById('description').value;
-            const response = await fetch('/todos', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ id: Date.now(), title, description, completed: false })
-            });
-            if (response.ok) {
-                fetchTodos();
+          // 완료 체크박스
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!todo.completed;
+          cb.title = '완료 토글';
+          cb.addEventListener('change', async () => {
+            // PATCH /todos/{id} { completed }
+            try {
+              const r = await fetch(`/todos/${todo.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed: cb.checked })
+              });
+              if (!r.ok) throw new Error();
+              await fetchStats();
+            } catch {
+              alert('완료 상태 업데이트 실패');
+              cb.checked = !cb.checked; // 롤백
             }
-        });
+          });
 
-        fetchTodos();
-    </script>
+          // 텍스트 영역 (제목/설명)
+          const textWrap = document.createElement('div');
+          const title = document.createElement('div');
+          const desc = document.createElement('div');
+          title.className = 'title';
+          desc.className = 'desc';
+          title.textContent = todo.title;
+          desc.textContent = todo.description || '';
+          textWrap.appendChild(title);
+          textWrap.appendChild(desc);
+
+          // 완료 시 시각적 처리
+          const applyStyle = () => {
+            title.style.textDecoration = cb.checked ? 'line-through' : 'none';
+            title.style.color = cb.checked ? '#999' : '#000';
+          };
+          applyStyle();
+          cb.addEventListener('change', applyStyle);
+
+          // 삭제 버튼
+          const del = document.createElement('button');
+          del.className = 'danger';
+          del.textContent = '삭제';
+          del.addEventListener('click', async () => {
+            if (!confirm('삭제할까요?')) return;
+            try {
+              const r = await fetch(`/todos/${todo.id}`, { method: 'DELETE' });
+              if (!r.ok) throw new Error();
+              li.remove();
+              await Promise.all([fetchStats(), fetchTodos()]);
+            } catch {
+              alert('삭제 실패');
+            }
+          });
+
+          li.appendChild(cb);
+          li.appendChild(textWrap);
+          li.appendChild(del);
+          todoList.appendChild(li);
+        }
+      } catch {
+        todoList.innerHTML = '<li class="muted">불러오기 실패</li>';
+      }
+    }
+
+    // --- 추가 폼 ---
+    $('#todo-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = $('#title').value.trim();
+      const description = $('#description').value.trim();
+      if (!title || !description) return;
+
+      try {
+        // 백엔드가 id 자동 발급하므로 id 안 보냄
+        const res = await fetch('/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, completed: false })
+        });
+        if (!res.ok) throw new Error();
+        $('#title').value = '';
+        $('#description').value = '';
+        await Promise.all([fetchStats(), fetchTodos()]);
+      } catch {
+        alert('추가 실패');
+      }
+    });
+
+    // --- 검색/필터/새로고침 ---
+    let searchTimer = null;
+    $('#search').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(fetchTodos, 250); // 디바운스
+    });
+    $('#filter').addEventListener('change', fetchTodos);
+    $('#refresh').addEventListener('click', () => { fetchStats(); fetchTodos(); });
+
+    // 초기 로드
+    fetchStats();
+    fetchTodos();
+  </script>
 </body>
 </html>

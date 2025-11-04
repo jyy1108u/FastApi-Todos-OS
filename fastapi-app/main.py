@@ -91,13 +91,16 @@ def get_todos(
     return todos[offset: offset + limit]
 
 # 변경 (status 기본 200, 자동 ID 없음 / 중복 체크도 빼서 원래 심플 로직과 동일)
-@app.post("/todos", response_model=TodoItem)
+@app.post("/todos", response_model=TodoItem)   # 200 유지 (테스트 기대)
 def create_todo(todo: TodoItem):
     with _file_lock:
         todos = load_todos()
-        todos.append(todo.model_dump())
+        data = todo.model_dump()
+        if data.get("id") is None:
+            data["id"] = next_id(todos)
+        todos.append(data)
         save_todos(todos)
-    return todo
+    return data
 
 # To-Do 항목 수정(전체 교체)
 @app.put("/todos/{todo_id}", response_model=TodoItem)

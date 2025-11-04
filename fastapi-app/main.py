@@ -18,12 +18,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# To-Do 항목 모델
+# 기존
+# class TodoItem(BaseModel):
+#     id: Optional[int] = Field(None, description="미지정 시 자동 할당")
+#     title: str = Field(..., min_length=1)
+#     description: str = ""
+#     completed: bool = False
+
+# 변경 (모두 필수)
 class TodoItem(BaseModel):
-    id: Optional[int] = Field(None, description="미지정 시 자동 할당")
-    title: str = Field(..., min_length=1)
-    description: str = ""
-    completed: bool = False
+    id: int
+    title: str
+    description: str
+    completed: bool
 
 # 부분수정용 모델 (PATCH)
 class TodoPatch(BaseModel):
@@ -83,20 +90,11 @@ def get_todos(
         ]
     return todos[offset: offset + limit]
 
-# 신규 To-Do 항목 추가 (자동 id, 중복 id 방지)
-@app.post("/todos", response_model=TodoItem, status_code=status.HTTP_201_CREATED)
+# 변경 (status 기본 200, 자동 ID 없음 / 중복 체크도 빼서 원래 심플 로직과 동일)
+@app.post("/todos", response_model=TodoItem)
 def create_todo(todo: TodoItem):
     with _file_lock:
         todos = load_todos()
-
-        # id 미지정이면 자동 할당
-        if todo.id is None:
-            todo.id = next_id(todos)
-        else:
-            # id 지정되었으면 중복 체크
-            if any(t["id"] == todo.id for t in todos):
-                raise HTTPException(status_code=409, detail="이미 존재하는 id")
-
         todos.append(todo.model_dump())
         save_todos(todos)
     return todo
@@ -135,13 +133,12 @@ def patch_todo(todo_id: int, patch: TodoPatch):
     raise HTTPException(status_code=404, detail="To-Do item not found")
 
 # To-Do 항목 삭제 (없으면 404)
-@app.delete("/todos/{todo_id}", response_model=dict, status_code=status.HTTP_200_OK)
+# 변경 (존재 여부와 상관없이 대상을 제외한 리스트 저장 → 200)
+@app.delete("/todos/{todo_id}", response_model=dict)
 def delete_todo(todo_id: int):
     with _file_lock:
         todos = load_todos()
-        if not any(t["id"] == todo_id for t in todos):
-            raise HTTPException(status_code=404, detail="To-Do item not found")
-        todos = [t for t in todos if t["id"] != todo_id]
+        todos = [t for t in todos if t.get("id") != todo_id]
         save_todos(todos)
     return {"message": "To-Do item deleted"}
 

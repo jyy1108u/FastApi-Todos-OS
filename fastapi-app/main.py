@@ -1,68 +1,163 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 import json
 import os
+import threading
+from typing import Optional, List
 
 app = FastAPI()
 
+# CORS (필요 없으면 아래 5줄 삭제해도 됨)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 필요하면 도메인 제한
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # To-Do 항목 모델
 class TodoItem(BaseModel):
-    id: int
-    title: str
-    description: str
-    completed: bool
+    id: Optional[int] = Field(None, description="미지정 시 자동 할당")
+    title: str = Field(..., min_length=1)
+    description: str = ""
+    completed: bool = False
+
+# 부분수정용 모델 (PATCH)
+class TodoPatch(BaseModel):
+    title: Optional[str] = Field(None, min_length=1)
+    description: Optional[str] = None
+    completed: Optional[bool] = None
 
 # JSON 파일 경로
 TODO_FILE = "todo.json"
 
+# 간단 파일 락 (동시 요청 시 꼬임 방지)
+_file_lock = threading.Lock()
+
 # JSON 파일에서 To-Do 항목 로드
-def load_todos():
-    if os.path.exists(TODO_FILE):
-        with open(TODO_FILE, "r") as file:
+def load_todos() -> list:
+    if not os.path.exists(TODO_FILE):
+        # 파일 없으면 빈 배열로 생성
+        save_todos([])
+        return []
+    with open(TODO_FILE, "r", encoding="utf-8") as file:
+        try:
             return json.load(file)
-    return []
+        except json.JSONDecodeError:
+            # 깨진 파일 대비
+            return []
 
 # JSON 파일에 To-Do 항목 저장
-def save_todos(todos):
-    with open(TODO_FILE, "w") as file:
-        json.dump(todos, file, indent=4)
+def save_todos(todos: list) -> None:
+    with open(TODO_FILE, "w", encoding="utf-8") as file:
+        json.dump(todos, file, indent=4, ensure_ascii=False)
 
-# To-Do 목록 조회
-@app.get("/todos", response_model=list[TodoItem])
-def get_todos():
-    return load_todos()
+def next_id(todos: list) -> int:
+    # 자동 id 발급 (빈 리스트면 1부터)
+    return (max((t["id"] for t in todos if "id" in t and t["id"] is not None), default=0) + 1)
 
-# 신규 To-Do 항목 추가
-@app.post("/todos", response_model=TodoItem)
-def create_todo(todo: TodoItem):
+# 건강 상태 체크
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# To-Do 목록 조회 + 필터/검색
+@app.get("/todos", response_model=List[TodoItem])
+def get_todos(
+    completed: Optional[bool] = Query(None, description="완료여부 필터"),
+    q: Optional[str] = Query(None, description="제목/설명 검색(부분일치)"),
+    limit: int = Query(1000, ge=1, le=10000, description="최대 반환 개수"),
+    offset: int = Query(0, ge=0, description="건너뛸 개수"),
+):
     todos = load_todos()
-    todos.append(todo.dict())
-    save_todos(todos)
+    if completed is not None:
+        todos = [t for t in todos if t.get("completed") is completed]
+    if q:
+        q_low = q.lower()
+        todos = [
+            t for t in todos
+            if q_low in t.get("title", "").lower() or q_low in t.get("description", "").lower()
+        ]
+    return todos[offset: offset + limit]
+
+# 신규 To-Do 항목 추가 (자동 id, 중복 id 방지)
+@app.post("/todos", response_model=TodoItem, status_code=status.HTTP_201_CREATED)
+def create_todo(todo: TodoItem):
+    with _file_lock:
+        todos = load_todos()
+
+        # id 미지정이면 자동 할당
+        if todo.id is None:
+            todo.id = next_id(todos)
+        else:
+            # id 지정되었으면 중복 체크
+            if any(t["id"] == todo.id for t in todos):
+                raise HTTPException(status_code=409, detail="이미 존재하는 id")
+
+        todos.append(todo.model_dump())
+        save_todos(todos)
     return todo
 
-# To-Do 항목 수정
+# To-Do 항목 수정(전체 교체)
 @app.put("/todos/{todo_id}", response_model=TodoItem)
 def update_todo(todo_id: int, updated_todo: TodoItem):
-    todos = load_todos()
-    for todo in todos:
-        if todo["id"] == todo_id:
-            todo.update(updated_todo.dict())
-            save_todos(todos)
-            return updated_todo
+    with _file_lock:
+        todos = load_todos()
+        for i, t in enumerate(todos):
+            if t["id"] == todo_id:
+                # URL의 id가 우선
+                data = updated_todo.model_dump()
+                data["id"] = todo_id
+                todos[i] = data
+                save_todos(todos)
+                return data
     raise HTTPException(status_code=404, detail="To-Do item not found")
 
-# To-Do 항목 삭제
-@app.delete("/todos/{todo_id}", response_model=dict)
+# To-Do 항목 부분 수정(PATCH)
+@app.patch("/todos/{todo_id}", response_model=TodoItem)
+def patch_todo(todo_id: int, patch: TodoPatch):
+    with _file_lock:
+        todos = load_todos()
+        for i, t in enumerate(todos):
+            if t["id"] == todo_id:
+                if patch.title is not None:
+                    t["title"] = patch.title
+                if patch.description is not None:
+                    t["description"] = patch.description
+                if patch.completed is not None:
+                    t["completed"] = patch.completed
+                todos[i] = t
+                save_todos(todos)
+                return t
+    raise HTTPException(status_code=404, detail="To-Do item not found")
+
+# To-Do 항목 삭제 (없으면 404)
+@app.delete("/todos/{todo_id}", response_model=dict, status_code=status.HTTP_200_OK)
 def delete_todo(todo_id: int):
-    todos = load_todos()
-    todos = [todo for todo in todos if todo["id"] != todo_id]
-    save_todos(todos)
+    with _file_lock:
+        todos = load_todos()
+        if not any(t["id"] == todo_id for t in todos):
+            raise HTTPException(status_code=404, detail="To-Do item not found")
+        todos = [t for t in todos if t["id"] != todo_id]
+        save_todos(todos)
     return {"message": "To-Do item deleted"}
+
+# 간단 통계
+@app.get("/todos/_stats", response_model=dict)
+def todo_stats():
+    todos = load_todos()
+    total = len(todos)
+    done = sum(1 for t in todos if t.get("completed"))
+    return {"total": total, "completed": done, "pending": total - done}
 
 # HTML 파일 서빙
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    with open("templates/index.html", "r") as file:
+    if not os.path.exists("templates/index.html"):
+        return HTMLResponse(content="<h1>templates/index.html 없음</h1>", status_code=200)
+    with open("templates/index.html", "r", encoding="utf-8") as file:
         content = file.read()
     return HTMLResponse(content=content)

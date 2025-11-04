@@ -161,7 +161,8 @@
         const res = await fetch('/todos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, completed: false })
+          // 수정 (id 포함)
+          body: JSON.stringify({ id: Date.now(), title, description, completed: false })
         });
         if (!res.ok) throw new Error();
         $('#title').value = '';

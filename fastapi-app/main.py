@@ -39,7 +39,7 @@ class TodoPatch(BaseModel):
     completed: Optional[bool] = None
 
 # JSON 파일 경로
-TODO_FILE = "todo.json"
+TODO_FILE = "todos.json"
 
 # 간단 파일 락 (동시 요청 시 꼬임 방지)
 _file_lock = threading.Lock()

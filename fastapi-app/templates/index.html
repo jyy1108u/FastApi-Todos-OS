@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>To-Do List</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 24px auto; }
+    .layout { display: flex; gap: 16px; align-items: flex-start; }
+    .main { flex: 1; min-width: 0; }
+    .sidebar { width: 280px; position: sticky; top: 16px; }
     form, .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
     ul { list-style: none; padding: 0; }
     li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
@@ -16,31 +19,69 @@
     button.danger { border: 0; background:#f44336; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer;}
     button.danger:hover { opacity:.9 }
     .muted { color:#999 }
+
+    /* Calendar */
+    .calendar { border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px; }
+    .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .cal-title { font-weight: 700; }
+    .cal-nav { display: flex; gap: 6px; }
+    .cal-nav button { padding: 4px 8px; cursor: pointer; }
+    .cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-weekdays { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .cal-day { text-align: center; padding: 8px 0; border-radius: 6px; cursor: pointer; user-select: none; }
+    .cal-day:hover { background: #f2f6ff; }
+    .cal-day.dim { color: #bbb; cursor: default; }
+    .cal-today { outline: 2px solid #3f51b5; }
+
+    @media (max-width: 820px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: auto; position: static; }
+    }
   </style>
 </head>
 <body>
   <h1>To-Do List <span id="stats" class="pill muted">-</span></h1>
 
-  <!-- 툴바: 검색 + 완료여부 필터 -->
-  <div class="toolbar">
-    <input type="search" id="search" placeholder="검색(제목/설명)" />
-    <select id="filter">
-      <option value="">전체</option>
-      <option value="false">미완료</option>
-      <option value="true">완료</option>
-    </select>
-    <button id="refresh" type="button">새로고침</button>
-    <span class="spacer"></span>
+  <div class="layout">
+    <div class="main">
+      <!-- 툴바: 검색 + 완료여부 필터 -->
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="검색(제목/설명)" />
+        <select id="filter">
+          <option value="">전체</option>
+          <option value="false">미완료</option>
+          <option value="true">완료</option>
+        </select>
+        <button id="refresh" type="button">새로고침</button>
+        <span class="spacer"></span>
+      </div>
+
+      <ul id="todo-list"></ul>
+
+      <!-- 추가 폼 -->
+      <form id="todo-form">
+        <input type="text" id="title" placeholder="Title" required />
+        <input type="text" id="description" placeholder="Description" required />
+        <button type="submit">Add To-Do</button>
+      </form>
+    </div>
+
+    <aside class="sidebar">
+      <div class="calendar" aria-label="달력">
+        <div class="cal-header">
+          <div class="cal-title" id="cal-title">-</div>
+          <div class="cal-nav">
+            <button type="button" id="cal-prev" title="이전 달">‹</button>
+            <button type="button" id="cal-next" title="다음 달">›</button>
+          </div>
+        </div>
+        <div class="cal-weekdays">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </aside>
   </div>
-
-  <ul id="todo-list"></ul>
-
-  <!-- 추가 폼 -->
-  <form id="todo-form">
-    <input type="text" id="title" placeholder="Title" required />
-    <input type="text" id="description" placeholder="Description" required />
-    <button type="submit">Add To-Do</button>
-  </form>
 
   <script>
     // --- 작은 유틸 ---
@@ -185,6 +226,86 @@
     // 초기 로드
     fetchStats();
     fetchTodos();
+
+    // --- 달력 ---
+    const calTitle = document.getElementById('cal-title');
+    const calGrid = document.getElementById('cal-grid');
+    const calPrev = document.getElementById('cal-prev');
+    const calNext = document.getElementById('cal-next');
+
+    // 기준 월(YYYY, MM)
+    let calYear, calMonth; // calMonth: 1~12
+
+    const zero = (n) => String(n).padStart(2, '0');
+    const formatDate = (y, m, d) => `${y}-${zero(m)}-${zero(d)}`;
+
+    function firstDayIndexMondayFirst(y, m) {
+      // JS Date: 0=Sun..6=Sat. We want Monday-first index 0..6
+      const jsIdx = new Date(y, m - 1, 1).getDay();
+      return (jsIdx + 6) % 7; // Sun(0)->6, Mon(1)->0, ...
+    }
+
+    function daysInMonth(y, m) {
+      return new Date(y, m, 0).getDate();
+    }
+
+    function todayTriple() {
+      const t = new Date();
+      return [t.getFullYear(), t.getMonth() + 1, t.getDate()];
+    }
+
+    function renderCalendar(y, m) {
+      calYear = y; calMonth = m;
+      calTitle.textContent = `${y}-${zero(m)}`;
+      calGrid.innerHTML = '';
+
+      const lead = firstDayIndexMondayFirst(y, m);
+      const count = daysInMonth(y, m);
+      const [ty, tm, td] = todayTriple();
+
+      // Leading blanks
+      for (let i = 0; i < lead; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cal-day dim';
+        cell.textContent = '';
+        calGrid.appendChild(cell);
+      }
+      // Month days
+      for (let d = 1; d <= count; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'cal-day';
+        cell.textContent = d;
+        if (y === ty && m === tm && d === td) cell.classList.add('cal-today');
+        cell.addEventListener('click', () => {
+          const desc = document.getElementById('description');
+          const stamp = formatDate(y, m, d);
+          if (!desc.value.trim()) {
+            desc.value = stamp;
+          } else if (!desc.value.includes(stamp)) {
+            desc.value = `${desc.value.trim()} ${stamp}`;
+          }
+          desc.focus();
+        });
+        calGrid.appendChild(cell);
+      }
+    }
+
+    // 초기 달: 오늘
+    (function initCalendar() {
+      const t = new Date();
+      renderCalendar(t.getFullYear(), t.getMonth() + 1);
+    })();
+
+    calPrev.addEventListener('click', () => {
+      let y = calYear, m = calMonth - 1;
+      if (m === 0) { y -= 1; m = 12; }
+      renderCalendar(y, m);
+    });
+    calNext.addEventListener('click', () => {
+      let y = calYear, m = calMonth + 1;
+      if (m === 13) { y += 1; m = 1; }
+      renderCalendar(y, m);
+    });
   </script>
 </body>
 </html>

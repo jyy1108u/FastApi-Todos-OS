@@ -1,0 +1,46 @@
+# VCS metadata
+.git
+.gitignore
+
+# Virtual environments
+.venv
+venv
+env
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Tests and tooling (include if you don't run tests in image)
+tests/
+.pytest_cache/
+.mypy_cache/
+coverage.*
+htmlcov/
+report.html
+
+# Build artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Environment files / secrets
+.env
+.env.*
+*.env
+
+# OS-specific
+.DS_Store
+Thumbs.db
+*.log
+
+# Sonar / scanners
+.scannerwork/
+sonar-project.properties
+

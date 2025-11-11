@@ -1,0 +1,48 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test/coverage caches and reports
+.pytest_cache/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+report.html
+
+# Build artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# Type checker caches
+.mypy_cache/
+.pyre/
+.pytype/
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files / secrets
+.env
+.env.*
+*.env
+
+# OS-specific
+.DS_Store
+Thumbs.db
+*.log
+
+# Sonar / scanners
+.scannerwork/
+

@@ -48,6 +48,18 @@ services:
     ports:
       - "7100:9100"
 
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8181:8080" # 바깥(호스트)은 8181로 공개, 내부는 8080 고정
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+
 volumes:
   sonarqube_conf:
   sonarqube_data:

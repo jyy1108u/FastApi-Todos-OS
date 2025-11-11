@@ -6,8 +6,12 @@ import json
 import os
 import threading
 from typing import Optional, List
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI()
+
+# Prometheus 메트릭스 엔드포인트 (/metrics)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 # CORS (필요 없으면 아래 5줄 삭제해도 됨)
 app.add_middleware(

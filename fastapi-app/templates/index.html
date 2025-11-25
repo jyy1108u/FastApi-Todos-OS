@@ -1,90 +1,136 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>To-Do List</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 24px auto; }
-    .layout { display: flex; gap: 16px; align-items: flex-start; }
-    .main { flex: 1; min-width: 0; }
-    .sidebar { width: 280px; position: sticky; top: 16px; }
-    form, .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-    ul { list-style: none; padding: 0; }
-    li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .title { font-weight: 600; }
-    .desc { color: #666; }
-    .spacer { flex: 1 }
-    .pill { font-size: 12px; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; }
-    button.danger { border: 0; background:#f44336; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer;}
-    button.danger:hover { opacity:.9 }
-    .muted { color:#999 }
-
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --card: #eef2ff;
+      --card-done: #e7f6ef;
+      --accent: #6b7cff;
+      --accent-2: #f28ba8;
+      --text: #1f2d3d;
+      --muted: #6b7280;
+      --border: #dfe4f2;
+      --shadow: 0 10px 30px rgba(60,72,97,0.12);
+      --shadow-hover: 0 16px 36px rgba(60,72,97,0.16);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f7f9ff 0%, #f3f7ff 45%, #f7fbf9 100%);
+      color: var(--text);
+      font-family: "Segoe UI", "Pretendard", "Inter", system-ui, -apple-system, sans-serif;
+    }
+    .page { max-width: 1100px; margin: 32px auto 40px; padding: 0 20px; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: -0.3px; }
+    .badge { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--muted); box-shadow: var(--shadow); }
+    .layout { display: flex; gap: 18px; align-items: flex-start; }
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+    .sidebar { width: 300px; position: sticky; top: 18px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .toolbar input, .toolbar select {
+      padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+      background: #fff; min-width: 180px; outline: none;
+    }
+    .toolbar button, .form button {
+      padding: 10px 14px; border-radius: 12px; border: none; cursor: pointer;
+      font-weight: 600; color: #fff; background: var(--accent); box-shadow: var(--shadow);
+    }
+    .toolbar button:hover, .form button:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+    .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+    .todo-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px; border-radius: 14px; background: var(--card);
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 150ms ease;
+    }
+    .todo-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+    .todo-card.done { background: var(--card-done); opacity: 0.96; }
+    .title { font-weight: 700; margin-bottom: 4px; }
+    .desc { color: var(--muted); font-size: 14px; }
+    .actions { margin-left: auto; display: flex; gap: 8px; }
+    .pill { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--muted); }
+    .btn {
+      border: none; border-radius: 10px; padding: 8px 10px; cursor: pointer; font-weight: 600;
+      color: #0f172a; background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .btn:hover { box-shadow: var(--shadow-hover); }
+    .btn.done { background: #cdeee1; color: #0f5132; }
+    .btn.delete { background: var(--accent-2); color: #fff; border: none; }
+    .form { display: flex; gap: 8px; flex-wrap: wrap; }
+    .form input { flex: 1; min-width: 200px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); }
+    .muted { color: var(--muted); }
     /* Calendar */
-    .calendar { border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px; }
+    .calendar { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
     .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
     .cal-title { font-weight: 700; }
     .cal-nav { display: flex; gap: 6px; }
-    .cal-nav button { padding: 4px 8px; cursor: pointer; }
-    .cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-    .cal-weekdays { font-size: 12px; color: #888; margin-bottom: 4px; }
-    .cal-day { text-align: center; padding: 8px 0; border-radius: 6px; cursor: pointer; user-select: none; }
-    .cal-day:hover { background: #f2f6ff; }
-    .cal-day.dim { color: #bbb; cursor: default; }
-    .cal-today { outline: 2px solid #3f51b5; }
-
-    @media (max-width: 820px) {
-      .layout { flex-direction: column; }
-      .sidebar { width: auto; position: static; }
-    }
+    .cal-nav button { padding: 6px 10px; cursor: pointer; border-radius: 10px; border: 1px solid var(--border); background: #fff; }
+    .cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .cal-weekdays { font-size: 12px; color: #888; margin-bottom: 6px; text-align: center; }
+    .cal-day { text-align: center; padding: 10px 0; border-radius: 10px; cursor: pointer; user-select: none; background: #f4f6fb; border: 1px solid transparent; }
+    .cal-day:hover { background: #e7ecff; }
+    .cal-day.dim { color: #bbb; cursor: default; background: transparent; border: none; }
+    .cal-today { outline: 2px solid var(--accent); background: #eef3ff; }
+    @media (max-width: 900px) { .layout { flex-direction: column; } .sidebar { width: auto; position: static; } }
   </style>
 </head>
 <body>
-  <h1>To-Do List <span id="stats" class="pill muted">-</span></h1>
-
-  <div class="layout">
-    <div class="main">
-      <!-- 툴바: 검색 + 완료여부 필터 -->
-      <div class="toolbar">
-        <input type="search" id="search" placeholder="검색(제목/설명)" />
-        <select id="filter">
-          <option value="">전체</option>
-          <option value="false">미완료</option>
-          <option value="true">완료</option>
-        </select>
-        <button id="refresh" type="button">새로고침</button>
-        <span class="spacer"></span>
-      </div>
-
-      <ul id="todo-list"></ul>
-
-      <!-- 추가 폼 -->
-      <form id="todo-form">
-        <input type="text" id="title" placeholder="Title" required />
-        <input type="text" id="description" placeholder="Description" required />
-        <button type="submit">Add To-Do</button>
-      </form>
+  <div class="page">
+    <div class="header">
+      <h1>To-Do List</h1>
+      <span id="stats" class="badge">-</span>
     </div>
 
-    <aside class="sidebar">
-      <div class="calendar" aria-label="달력">
-        <div class="cal-header">
-          <div class="cal-title" id="cal-title">-</div>
-          <div class="cal-nav">
-            <button type="button" id="cal-prev" title="이전 달">‹</button>
-            <button type="button" id="cal-next" title="다음 달">›</button>
+    <div class="layout">
+      <div class="main">
+        <div class="panel">
+          <div class="toolbar">
+            <input type="search" id="search" placeholder="검색(제목/설명)" />
+            <select id="filter">
+              <option value="">전체</option>
+              <option value="false">미완료</option>
+              <option value="true">완료</option>
+            </select>
+            <button id="refresh" type="button">새로고침</button>
           </div>
+          <ul id="todo-list" class="list"></ul>
         </div>
-        <div class="cal-weekdays">
-          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+
+        <div class="panel">
+          <form id="todo-form" class="form">
+            <input type="text" id="title" placeholder="Title" required />
+            <input type="text" id="description" placeholder="Description" required />
+            <button type="submit">Add To-Do</button>
+          </form>
         </div>
-        <div class="cal-grid" id="cal-grid"></div>
       </div>
-    </aside>
+
+      <aside class="sidebar">
+        <div class="calendar" aria-label="달력">
+          <div class="cal-header">
+            <div class="cal-title" id="cal-title">-</div>
+            <div class="cal-nav">
+              <button type="button" id="cal-prev" title="이전 달">‹</button>
+              <button type="button" id="cal-next" title="다음 달">›</button>
+            </div>
+          </div>
+          <div class="cal-weekdays">
+            <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <script>
-    // --- 작은 유틸 ---
     const $ = (sel) => document.querySelector(sel);
     const qs = () => {
       const q = $('#search').value.trim();
@@ -92,11 +138,9 @@
       const p = new URLSearchParams();
       if (q) p.set('q', q);
       if (completed !== '') p.set('completed', completed);
-      // 기본 limit/offset 그대로 (원하면 limit, offset도 추가 가능)
       return p.toString() ? `?${p.toString()}` : '';
     };
 
-    // --- 통계 불러오기 ---
     async function fetchStats() {
       try {
         const res = await fetch('/todos/_stats');
@@ -108,7 +152,6 @@
       }
     }
 
-    // --- 목록 불러오기 (검색/필터 반영) ---
     async function fetchTodos() {
       const todoList = $('#todo-list');
       todoList.innerHTML = '<li class="muted">불러오는 중...</li>';
@@ -123,29 +166,13 @@
         }
         for (const todo of todos) {
           const li = document.createElement('li');
+          li.className = 'todo-card' + (todo.completed ? ' done' : '');
 
-          // 완료 체크박스
           const cb = document.createElement('input');
           cb.type = 'checkbox';
           cb.checked = !!todo.completed;
           cb.title = '완료 토글';
-          cb.addEventListener('change', async () => {
-            // PATCH /todos/{id} { completed }
-            try {
-              const r = await fetch(`/todos/${todo.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ completed: cb.checked })
-              });
-              if (!r.ok) throw new Error();
-              await fetchStats();
-            } catch {
-              alert('완료 상태 업데이트 실패');
-              cb.checked = !cb.checked; // 롤백
-            }
-          });
 
-          // 텍스트 영역 (제목/설명)
           const textWrap = document.createElement('div');
           const title = document.createElement('div');
           const desc = document.createElement('div');
@@ -156,33 +183,59 @@
           textWrap.appendChild(title);
           textWrap.appendChild(desc);
 
-          // 완료 시 시각적 처리
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const doneBtn = document.createElement('button');
+          doneBtn.className = 'btn done';
+          doneBtn.textContent = todo.completed ? '되돌리기' : '완료';
+          const del = document.createElement('button');
+          del.className = 'btn delete';
+          del.textContent = '삭제';
+
           const applyStyle = () => {
+            li.classList.toggle('done', cb.checked);
             title.style.textDecoration = cb.checked ? 'line-through' : 'none';
-            title.style.color = cb.checked ? '#999' : '#000';
+            title.style.color = cb.checked ? '#6b7280' : '#111827';
+            doneBtn.textContent = cb.checked ? '되돌리기' : '완료';
           };
           applyStyle();
-          cb.addEventListener('change', applyStyle);
 
-          // 삭제 버튼
-          const del = document.createElement('button');
-          del.className = 'danger';
-          del.textContent = '삭제';
+          const updateCompleted = async (state) => {
+            try {
+              const r = await fetch(`/todos/${todo.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed: state })
+              });
+              if (!r.ok) throw new Error();
+              cb.checked = state;
+              applyStyle();
+              await fetchStats();
+            } catch {
+              alert('완료 상태 업데이트 실패');
+            }
+          };
+
+          cb.addEventListener('change', () => updateCompleted(cb.checked));
+          doneBtn.addEventListener('click', () => updateCompleted(!cb.checked));
+
           del.addEventListener('click', async () => {
             if (!confirm('삭제할까요?')) return;
             try {
               const r = await fetch(`/todos/${todo.id}`, { method: 'DELETE' });
               if (!r.ok) throw new Error();
-              li.remove();
               await Promise.all([fetchStats(), fetchTodos()]);
             } catch {
               alert('삭제 실패');
             }
           });
 
+          actions.appendChild(doneBtn);
+          actions.appendChild(del);
+
           li.appendChild(cb);
           li.appendChild(textWrap);
-          li.appendChild(del);
+          li.appendChild(actions);
           todoList.appendChild(li);
         }
       } catch {
@@ -190,7 +243,6 @@
       }
     }
 
-    // --- 추가 폼 ---
     $('#todo-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const title = $('#title').value.trim();
@@ -198,11 +250,9 @@
       if (!title || !description) return;
 
       try {
-        // 백엔드가 id 자동 발급하므로 id 안 보냄
         const res = await fetch('/todos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // 수정 (id 포함)
           body: JSON.stringify({ id: Date.now(), title, description, completed: false })
         });
         if (!res.ok) throw new Error();
@@ -214,45 +264,34 @@
       }
     });
 
-    // --- 검색/필터/새로고침 ---
     let searchTimer = null;
     $('#search').addEventListener('input', () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(fetchTodos, 250); // 디바운스
+      searchTimer = setTimeout(fetchTodos, 250);
     });
     $('#filter').addEventListener('change', fetchTodos);
     $('#refresh').addEventListener('click', () => { fetchStats(); fetchTodos(); });
 
-    // 초기 로드
     fetchStats();
     fetchTodos();
 
-    // --- 달력 ---
     const calTitle = document.getElementById('cal-title');
     const calGrid = document.getElementById('cal-grid');
     const calPrev = document.getElementById('cal-prev');
     const calNext = document.getElementById('cal-next');
 
-    // 기준 월(YYYY, MM)
-    let calYear, calMonth; // calMonth: 1~12
+    let calYear, calMonth;
 
     const zero = (n) => String(n).padStart(2, '0');
     const formatDate = (y, m, d) => `${y}-${zero(m)}-${zero(d)}`;
 
     function firstDayIndexMondayFirst(y, m) {
-      // JS Date: 0=Sun..6=Sat. We want Monday-first index 0..6
       const jsIdx = new Date(y, m - 1, 1).getDay();
-      return (jsIdx + 6) % 7; // Sun(0)->6, Mon(1)->0, ...
+      return (jsIdx + 6) % 7;
     }
 
-    function daysInMonth(y, m) {
-      return new Date(y, m, 0).getDate();
-    }
-
-    function todayTriple() {
-      const t = new Date();
-      return [t.getFullYear(), t.getMonth() + 1, t.getDate()];
-    }
+    function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+    function todayTriple() { const t = new Date(); return [t.getFullYear(), t.getMonth() + 1, t.getDate()]; }
 
     function renderCalendar(y, m) {
       calYear = y; calMonth = m;
@@ -263,14 +302,11 @@
       const count = daysInMonth(y, m);
       const [ty, tm, td] = todayTriple();
 
-      // Leading blanks
       for (let i = 0; i < lead; i++) {
         const cell = document.createElement('div');
         cell.className = 'cal-day dim';
-        cell.textContent = '';
         calGrid.appendChild(cell);
       }
-      // Month days
       for (let d = 1; d <= count; d++) {
         const cell = document.createElement('div');
         cell.className = 'cal-day';
@@ -290,7 +326,6 @@
       }
     }
 
-    // 초기 달: 오늘
     (function initCalendar() {
       const t = new Date();
       renderCalendar(t.getFullYear(), t.getMonth() + 1);

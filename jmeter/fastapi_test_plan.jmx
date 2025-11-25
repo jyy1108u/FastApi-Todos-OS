@@ -38,13 +38,21 @@
       </HeaderManager>
       <hashTree/>
 
-      <!-- Thread Group -->
+      <!-- Thread Group (짧게 끝나는 버전) -->
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="FastAPI Load Test" enabled="true">
-        <stringProp name="ThreadGroup.num_threads">10</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">5</stringProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
-          <stringProp name="LoopController.loops">5</stringProp>
+          <!-- ✨ 무한 반복 끄기 -->
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <!-- ✨ 1번만 반복 -->
+          <stringProp name="LoopController.loops">1</stringProp>
         </elementProp>
+        <!-- ✨ 쓰레드 수도 조금만 -->
+        <stringProp name="ThreadGroup.num_threads">3</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
 
       <hashTree>

@@ -93,6 +93,16 @@ services:
       - /jmeter/report
     networks:
       - loadtest-net
+  
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=jmeter
+    networks:
+      - loadtest-net
 
 networks:
   loadtest-net:

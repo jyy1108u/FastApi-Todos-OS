@@ -113,6 +113,8 @@ services:
     container_name: loki
     ports:
       - "3100:3100"  
+    networks:
+      - loadtest-net
 
 networks:
   loadtest-net:

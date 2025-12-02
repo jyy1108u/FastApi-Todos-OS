@@ -10,19 +10,18 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 import logging
 import time
-from multiprocessing import Queue
 from os import getenv
 from fastapi import Request
-from logging_loki import LokiQueueHandler
+from logging_loki import LokiHandler
 
 app = FastAPI()
 
 # Prometheus 메트릭스 엔드포인트 (/metrics)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
-loki_logs_handler = LokiQueueHandler(
-    Queue(-1),
-    url=getenv("LOKI_ENDPOINT"),
+# Loki 핸들러 (큐 리스너 없이 바로 전송)
+loki_logs_handler = LokiHandler(
+    url=getenv("LOKI_ENDPOINT", "http://loki:3100/loki/api/v1/push"),
     tags={"application": "fastapi"},
     version="1",
 )
@@ -48,6 +47,9 @@ async def log_requests(request: Request, call_next):
         custom_logger.info(log_message)
 
     return response
+
+# 요청 로깅 미들웨어 등록
+app.middleware("http")(log_requests)
 
 
 # CORS (필요 없으면 아래 5줄 삭제해도 됨)
